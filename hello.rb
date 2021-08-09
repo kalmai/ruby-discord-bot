@@ -5,7 +5,6 @@ require 'net/http'
 require 'json'
 
 Dotenv.load('.env')
-#change
 
 bot = Discordrb::Bot.new token: ENV['TOKEN']
 
@@ -25,32 +24,74 @@ def wind_direction_finder(degrees)
 
 end
 
-bot.message() do |event|
-  uri = URI("http://api.openweathermap.org/data/2.5/find?q=#{event.message}&units=metric&type=accurate&mode=yml&APPID=#{ENV['KEY'].to_s}")
+def return_weather_for_city(city)
+  uri = URI("http://api.openweathermap.org/data/2.5/find?q=#{city}&units=metric&type=accurate&mode=yml&APPID=#{ENV['KEY'].to_s}")
   res = Net::HTTP.get_response(uri)
-  data = JSON.parse(res.body)
-  exact_city = nil
-  data['list'].each { |city| exact_city = city if city['name'].downcase.eql?(event.message.to_s.downcase) }
-  temp = exact_city['main']['temp']
-  humidity = exact_city['main']['humidity']
-  wind = exact_city['wind']
-  wind_speed = wind['speed']
-  wind_direction = wind_direction_finder(wind['deg'])
-  rain = exact_city['rain']
-  cloudy = exact_city['clouds'].values[0]
-  binding.pry
-
-
-
-  # => {"id"=>1850147,                                                                                                                                                                                                    "name"=>"Tokyo",                                                                                                                                                                                                     "coord"=>{"lat"=>35.6895, "lon"=>139.6917},                                                                                                                                                                          "main"=>{"temp"=>28.03, "feels_like"=>32.33, "temp_min"=>25.44, "temp_max"=>29.24, "pressure"=>1002, "humidity"=>81},                                                                                                "dt"=>1628456952,                                                                                                                                                                                                    "wind"=>{"speed"=>0.89, "deg"=>202},                                                                                                                                                                                 "sys"=>{"country"=>"JP"},                                                                                                                                                                                            "rain"=>nil,                                                                                                                                                                                                         "snow"=>nil,                                                                                                                                                                                                         "clouds"=>{"all"=>75},                                                                                                                                                                                               "weather"=>[{"id"=>803, "main"=>"Clouds", "description"=>"broken clouds", "icon"=>"04d"}]}  
-
-  #res = Net::HTTP.start(uri.host, uri.port) {|http|
-  #  request = Net::HTTP::Get.new uri
-  #  response = http.request request
-  #  puts response
-  #}
-  #puts res.body
-  event.respond "#{event.message} Pong!"
+  JSON.parse(res.body)
 end
+
+#def remove_duplicates_in_hash(hsh)
+#  new_hsh = {}
+#
+#  hsh.each do |id, coords|
+#    unless new_hsh.values.include?(coords)
+#      new_hsh[id] = coords
+#    end
+#  end
+#
+#  new_hsh
+#end
+
+def process_coords_to_address(locations)
+  if locations.size > 0
+    uri_string = "http://www.mapquestapi.com/geocoding/v1/batch?key=#{ENV['MAP_KEY']}"
+    locations.each do |id, coords| 
+      coord_string = coords['lat'].to_s << ',' << coords['lon'].to_s
+      uri_string = uri_string << "&location=#{coord_string}"
+    end
+    uri = URI(uri_string)
+
+    res = Net::HTTP.get_response(uri)
+    JSON.parse(res.body)
+  end
+
+end
+
+bot.message() do |event|
+  user_input = event.message.content.split(' ')
+  if user_input.first.eql?('!weather')
+    city = user_input.last
+
+    data = return_weather_for_city(city)
+    #data['list'].each { |city| exact_city = city if city['name'].downcase.eql?(event.message.to_s.downcase) }
+
+    locations = data['list'].each.with_object({}) do |location, hsh|
+      id = location['id']
+      coords = location['coord']
+      unless hsh.values.include?(coords)
+        hsh[id] = coords
+      end
+    end
+    binding.pry
+
+    #uniq_locations = remove_duplicates_in_hash(locations)
+
+    response = process_coords_to_address(uniq_locations)
+    binding.pry
+    #test = response['results'][0]['locations'][0]
+    #test2 = response['results']
+    #temp = exact_city['main']['temp']
+    #humidity = exact_city['main']['humidity']
+    #wind = exact_city['wind']
+    #wind_speed = wind['speed']
+    #wind_direction = wind_direction_finder(wind['deg'])
+    #rain = exact_city['rain']
+    #cloudy = exact_city['clouds'].values[0]
+
+    #event.respond "#{locations.to_s}"
+    #event.respond "#{event.message} Pong!"
+  end
+end
+
 
 bot.run
