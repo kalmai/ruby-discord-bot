@@ -30,6 +30,18 @@ def return_weather_for_city(city)
   JSON.parse(res.body)
 end
 
+def weather_string_builder(weather)
+
+    temp = weather['main']['temp']
+    humidity = weather['main']['humidity']
+    wind = weather['wind']
+    wind_speed = wind['speed']
+    wind_direction = wind_direction_finder(wind['deg'])
+    rain = weather['rain']
+    cloudy = weather['clouds'].values[0]
+  binding.pry
+end
+
 #def remove_duplicates_in_hash(hsh)
 #  new_hsh = {}
 #
@@ -46,13 +58,27 @@ def process_coords_to_address(locations)
   if locations.size > 0
     uri_string = "http://www.mapquestapi.com/geocoding/v1/batch?key=#{ENV['MAP_KEY']}"
     locations.each do |id, coords| 
-      coord_string = coords['lat'].to_s << ',' << coords['lon'].to_s
+      coord_string = coords[0].to_s << ',' << coords[1].to_s
       uri_string = uri_string << "&location=#{coord_string}"
     end
     uri = URI(uri_string)
 
     res = Net::HTTP.get_response(uri)
-    JSON.parse(res.body)
+    json = JSON.parse(res.body)
+    json['results'].each do |city|
+      aa1 = city['locations'][0]['adminArea1']
+      aa3 = city['locations'][0]['adminArea3']
+      aa4 = city['locations'][0]['adminArea4']
+      aa5 = city['locations'][0]['adminArea5']
+      aa6 = city['locations'][0]['adminArea6']
+      reverse_geocoord_locations = "#{aa1} #{aa3} #{aa4} #{aa5} #{aa6}"
+      matching_coords_city = locations.select { |k, v| v == city['providedLocation']['latLng'].values }
+
+      locations[matching_coords_city.keys.first] = reverse_geocoord_locations
+      
+    end
+    return locations
+
   end
 
 end
@@ -67,17 +93,43 @@ bot.message() do |event|
 
     locations = data['list'].each.with_object({}) do |location, hsh|
       id = location['id']
-      coords = location['coord']
+      coords = location['coord'].values
       unless hsh.values.include?(coords)
         hsh[id] = coords
       end
     end
-    binding.pry
 
-    #uniq_locations = remove_duplicates_in_hash(locations)
+    response = process_coords_to_address(locations)
+    if response.size > 1
+      reply = "Enter the corresponding number to the location you want to know the weather for:\n"
+      i = 1
+      response.each do |k, v|
+        reply << "#{i}. #{v}\n"
+        response[k] = i
+        i += 1
+      end
+      event.user.dm(reply)
+      event.user.await(:selection) do |reply_event|
+        binding.pry
+        selection = response.select { |k, v| v == reply_event.message.content.to_i }
+        weather = data['list'].select { |d| d['id'] == selection } 
+        weather_string = weather_string_builder(weather)
 
-    response = process_coords_to_address(uniq_locations)
-    binding.pry
+        reply_event.user.dm(weather_string)
+      end
+    elsif response.size == 1
+      weather_string = weather_string_builder(data['list'][0])
+      event.user.dm(weather_string)
+    end
+
+    #event.user.dm(response.to_s)
+    #event.user.await(:empty) do |reply_event|
+    #  reply_event.user.dm(reply_event.message.content << 'hey again')
+    #end
+
+    #bot.add_await!() do |reply_event|
+    #  binding.pry
+    #end
     #test = response['results'][0]['locations'][0]
     #test2 = response['results']
     #temp = exact_city['main']['temp']
