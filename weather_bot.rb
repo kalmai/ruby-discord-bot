@@ -119,11 +119,16 @@ bot.message() do |event|
         end
         event.user.dm(reply)
         event.user.await(:selection) do |reply_event|
-          selection = id_select.select { |k, v| v == reply_event.message.content.to_i }.keys.first
-          weather = data['list'].select { |d| d['id'] == selection } 
-          weather_string = weather_string_builder(weather.first)
+          user_response = reply_event.message.content
+          if user_response.to_i >= 1 && user_response.to_i <= id_select.size
+            selection = id_select.select { |k, v| v == user_response.to_i }.keys.first
+            weather = data['list'].select { |d| d['id'] == selection } 
+            weather_string = weather_string_builder(weather.first)
 
-          reply_event.user.dm("The weather in #{response[selection]} is: " << weather_string)
+            reply_event.user.dm("The weather in #{response[selection]} is: " << weather_string)
+          else
+            reply_event.user.dm("#{user_response} is not a valid selection")
+          end
         end
       elsif response.size == 1
         weather_string = weather_string_builder(data['list'][0])
